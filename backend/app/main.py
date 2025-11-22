@@ -7,6 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.config.database import get_db
+from app.core.security import get_current_user, get_current_admin
+from app.models.user import User
+from app.models.admin import Admin
 
 # Create FastAPI app
 app = FastAPI(
@@ -26,21 +29,34 @@ categories_router = APIRouter(prefix="/categories", tags=["categories"])
 
 
 @categories_router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
-async def create_category(category: CategoryCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new category."""
+async def create_category(
+    category: CategoryCreate, 
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Create a new category (Admin only)."""
     return await crud_category.create_category(db, category)
 
 
 @categories_router.get("/", response_model=List[CategoryResponse])
-async def get_categories(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    """Get all categories."""
+async def get_categories(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all categories (Authenticated users only)."""
     categories = await crud_category.get_categories(db, skip=skip, limit=limit)
     return categories
 
 
 @categories_router.get("/{category_id}", response_model=CategoryResponse)
-async def get_category(category_id: int, db: AsyncSession = Depends(get_db)):
-    """Get a category by ID."""
+async def get_category(
+    category_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a category by ID (Authenticated users only)."""
     category = await crud_category.get_category(db, category_id)
     if not category:
         raise HTTPException(
@@ -54,9 +70,10 @@ async def get_category(category_id: int, db: AsyncSession = Depends(get_db)):
 async def update_category(
     category_id: int,
     category_update: CategoryUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
 ):
-    """Update a category."""
+    """Update a category (Admin only)."""
     category = await crud_category.update_category(db, category_id, category_update)
     if not category:
         raise HTTPException(
@@ -67,8 +84,12 @@ async def update_category(
 
 
 @categories_router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_category(category_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a category."""
+async def delete_category(
+    category_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Delete a category (Admin only)."""
     success = await crud_category.delete_category(db, category_id)
     if not success:
         raise HTTPException(

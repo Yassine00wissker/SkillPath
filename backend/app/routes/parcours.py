@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.config.database import get_db
+from app.core.security import get_current_user, get_current_admin
+from app.models.user import User
+from app.models.admin import Admin
 from app.crud import parcours as crud_parcours
 from app.schemas.parcours import ParcoursCreate, ParcoursUpdate, ParcoursResponse
 
@@ -9,21 +12,34 @@ router = APIRouter(prefix="/parcours", tags=["parcours"])
 
 
 @router.post("/", response_model=ParcoursResponse, status_code=status.HTTP_201_CREATED)
-async def create_parcours(parcours: ParcoursCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new parcours."""
+async def create_parcours(
+    parcours: ParcoursCreate, 
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Create a new parcours (Admin only)."""
     return await crud_parcours.create_parcours(db, parcours)
 
 
 @router.get("/", response_model=List[ParcoursResponse])
-async def get_parcours_list(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
-    """Get all parcours."""
+async def get_parcours_list(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all parcours (Authenticated users only)."""
     parcours_list = await crud_parcours.get_parcours_list(db, skip=skip, limit=limit)
     return parcours_list
 
 
 @router.get("/{parcours_id}", response_model=ParcoursResponse)
-async def get_parcours(parcours_id: int, db: AsyncSession = Depends(get_db)):
-    """Get a parcours by ID."""
+async def get_parcours(
+    parcours_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a parcours by ID (Authenticated users only)."""
     parcours = await crud_parcours.get_parcours(db, parcours_id)
     if not parcours:
         raise HTTPException(
@@ -37,9 +53,10 @@ async def get_parcours(parcours_id: int, db: AsyncSession = Depends(get_db)):
 async def update_parcours(
     parcours_id: int,
     parcours_update: ParcoursUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
 ):
-    """Update a parcours."""
+    """Update a parcours (Admin only)."""
     parcours = await crud_parcours.update_parcours(db, parcours_id, parcours_update)
     if not parcours:
         raise HTTPException(
@@ -50,8 +67,12 @@ async def update_parcours(
 
 
 @router.delete("/{parcours_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_parcours(parcours_id: int, db: AsyncSession = Depends(get_db)):
-    """Delete a parcours."""
+async def delete_parcours(
+    parcours_id: int, 
+    db: AsyncSession = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Delete a parcours (Admin only)."""
     success = await crud_parcours.delete_parcours(db, parcours_id)
     if not success:
         raise HTTPException(
@@ -59,4 +80,3 @@ async def delete_parcours(parcours_id: int, db: AsyncSession = Depends(get_db)):
             detail="Parcours not found"
         )
     return None
-
