@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.config.database import get_db
-from app.core.security import get_current_user, get_current_admin
+from app.core.security import get_current_user, get_current_admin, get_current_content_creator
 from app.models.user import User
 from app.models.admin import Admin
 from app.crud import formation as crud_formation
@@ -16,9 +16,9 @@ router = APIRouter(prefix="/formations", tags=["formations"])
 async def create_formation(
     formation: FormationCreate, 
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_user: User = Depends(get_current_content_creator)
 ):
-    """Create a new formation (Admin only)."""
+    """Create a new formation (Content creator or Admin only)."""
     # Verify category exists
     category = await crud_category.get_category(db, formation.category_id)
     if not category:
@@ -62,9 +62,9 @@ async def update_formation(
     formation_id: int,
     formation_update: FormationUpdate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_user: User = Depends(get_current_content_creator)
 ):
-    """Update a formation (Admin only)."""
+    """Update a formation (Content creator or Admin only)."""
     # Verify category exists if category_id is being updated
     if formation_update.category_id:
         category = await crud_category.get_category(db, formation_update.category_id)
@@ -87,9 +87,9 @@ async def update_formation(
 async def delete_formation(
     formation_id: int, 
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_user: User = Depends(get_current_content_creator)
 ):
-    """Delete a formation (Admin only)."""
+    """Delete a formation (Content creator or Admin only)."""
     success = await crud_formation.delete_formation(db, formation_id)
     if not success:
         raise HTTPException(

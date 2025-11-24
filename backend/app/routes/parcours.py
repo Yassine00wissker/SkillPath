@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.config.database import get_db
-from app.core.security import get_current_user, get_current_admin
+from app.core.security import get_current_user, get_current_admin, get_current_content_creator
 from app.models.user import User
 from app.models.admin import Admin
 from app.crud import parcours as crud_parcours
@@ -15,9 +15,9 @@ router = APIRouter(prefix="/parcours", tags=["parcours"])
 async def create_parcours(
     parcours: ParcoursCreate, 
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_user: User = Depends(get_current_content_creator)
 ):
-    """Create a new parcours (Admin only)."""
+    """Create a new parcours (Content creator or Admin only)."""
     return await crud_parcours.create_parcours(db, parcours)
 
 
@@ -54,9 +54,9 @@ async def update_parcours(
     parcours_id: int,
     parcours_update: ParcoursUpdate,
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_user: User = Depends(get_current_content_creator)
 ):
-    """Update a parcours (Admin only)."""
+    """Update a parcours (Content creator or Admin only)."""
     parcours = await crud_parcours.update_parcours(db, parcours_id, parcours_update)
     if not parcours:
         raise HTTPException(
@@ -70,9 +70,9 @@ async def update_parcours(
 async def delete_parcours(
     parcours_id: int, 
     db: AsyncSession = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
+    current_user: User = Depends(get_current_content_creator)
 ):
-    """Delete a parcours (Admin only)."""
+    """Delete a parcours (Content creator or Admin only)."""
     success = await crud_parcours.delete_parcours(db, parcours_id)
     if not success:
         raise HTTPException(

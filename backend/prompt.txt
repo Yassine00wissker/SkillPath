@@ -1,0 +1,192 @@
+
+## Backend: add keyword recommender endpoint (if missing)
+```
+Add a new FastAPI endpoint POST /api/recommend/keyword that:
+- Accepts JSON: {"user_id": int, "top_n": int (optional, default 5)}.
+- Fetches user by id from DB.
+- Loads all jobs and formations.
+- Uses a simple keyword scoring: count matches between lowercase user.competence + user.interests and formation.title + formation.description and job.requirements + job.title.
+- Normalize score = matches / max_possible (or just use raw count then sort).
+- Returns top_n formations and top_n jobs as JSON with score fields.
+- Use existing SQLAlchemy models and get_db dependency.
+- Add simple unit tests (pytest) that mock a user with skills and check the response structure and sorting.
+```
+
+---
+
+## Backend: add Gemini-enhanced recommendation endpoint
+```
+Add POST /api/recommend/ai that:
+- Accepts JSON: {"user_id": int, "mode": "enhance"|"generate", "top_n": int}
+- Fetches the user and loads jobs/formations (or a subset).
+- If mode=="enhance": constructs a prompt describing the user (competence, interests), plus a list of candidate jobs/formations and asks Gemini to re-rank/top-k or score each item. Expect Gemini to return JSON with scores or ranked ids.
+- If mode=="generate": asks Gemini to generate job/course suggestions based on user's skills/interests.
+- Do NOT hardcode API keys. Read GEMINI_API_KEY from env (.env) and use a small service function gemini_client.send(prompt)->response (mockable).
+- Implement gemini_client with a function that POSTs to Gemini HTTP API; in dev allow a "mock_mode" env var that returns deterministic JSON for testing.
+- Validate Gemini response JSON safely and fallback to keyword recommender if Gemini fails.
+- Return unified JSON: {"source":"gemini"|"keyword", "jobs":[...], "formations":[...]}
+- Add tests that mock gemini_client to simulate success and failure.
+```
+
+---
+
+## Backend: prompt template to send to Gemini (in code)
+```
+Create a template string function build_gemini_prompt(user, candidates, task) that returns a clear instruction:
+- System: You are an assistant that ranks and suggests jobs and courses for a user. Return only valid JSON.
+- User: Provide user profile: email/nom/competence/interests (list).
+- Task: "Rank the following candidates by relevance to this user. For each candidate return id, title, score(0-1), and one short explanation (<=20 words). Return output as JSON: {\"jobs\":[...],\"formations\":[...] }."
+- Include up to 50 candidates (title + short description + skills).
+- Ask for JSON only. Keep prompt concise and deterministic.
+```
+
+---
+
+## Frontend: project scaffold (Vite + React + Tailwind + JS)
+```
+Generate a React app scaffold using Vite (React + JavaScript). Include Tailwind CSS setup and routing (react-router-dom). Provide package.json scripts: start, build, dev, test.
+Create the following file/folder structure:
+src/
+ ├─ main.jsx
+ ├─ App.jsx
+ ├─ api/
+ │   └─ api.js         // Axios wrapper with baseURL and JWT handling (localStorage)
+ ├─ pages/
+ │   ├─ Login.jsx
+ │   ├─ Register.jsx
+ │   ├─ Dashboard.jsx  // shows user skills, buttons to call recommendations
+ │   ├─ Jobs.jsx
+ │   └─ Formations.jsx
+ ├─ components/
+ │   ├─ RecommendButton.jsx
+ │   ├─ ResultList.jsx
+ │   └─ ProtectedRoute.jsx
+ └─ styles/
+    └─ globals.css
+```
+
+---
+
+## Frontend: API helper (axios)
+```
+Create src/api/api.js:
+- Exports axios instance with baseURL from env (REACT_APP_API_URL).
+- Add request interceptor to attach Authorization: Bearer <token> from localStorage.
+- Export helper functions: registerUser(data), login(credentials), getUser(userId), getJobs(), getFormations(), recommendKeyword(userId, top_n), recommendAI(userId, top_n).
+- recommendAI should POST to /api/recommend/ai with mode param.
+- Include error handling: throw with readable message.
+```
+
+---
+
+## Frontend: Login / Register pages
+```
+Create simple Login.jsx and Register.jsx:
+- Forms with nom, prenom, email, password, competence (comma-separated), interests (comma-separated).
+- On submit: call API, store token in localStorage, redirect to /dashboard.
+- Show basic validation and error messages.
+```
+
+---
+
+## Frontend: Dashboard + RecommendButton
+```
+Create Dashboard.jsx:
+- Fetch current user profile (from /api/users/{id} or encoded in token).
+- Show user competence and interests as tags.
+- Two buttons:
+  1) "Recommend (Keyword)" -> calls recommendKeyword(userId, top_n).
+  2) "Recommend (AI)" -> calls recommendAI(userId, top_n) (this triggers backend Gemini call).
+- Use RecommendButton.jsx component to handle click, show spinner, call API, and render results using ResultList.jsx.
+- If AI call fails, show fallback option to "Try keyword recommender" and show error text.
+- Persist last recommendations to local state; allow copying/exporting JSON.
+```
+
+---
+
+## Frontend: RecommendButton component
+```
+Create RecommendButton.jsx:
+- Props: userId, mode ('keyword'|'ai'), topN (default 5), onResults(results).
+- Renders button; on click disables button, sets loading state, calls api.recommendKeyword or api.recommendAI depending on mode.
+- Handles 401 by redirecting to login.
+- Calls onResults with response data, and shows toast or inline message on error.
+- Keep UI minimal: button + spinner + small status text.
+```
+
+---
+
+## Frontend: ResultList component
+```
+Create ResultList.jsx:
+- Props: results object {jobs: [...], formations: [...]}
+- Renders two lists with title, short description, score (rounded 2 decimals), and explanation (if provided).
+- Each list item has "Save" button to add to user's saved list (POST to /api/users/{id}/saved or just store locally).
+```
+
+---
+
+## Frontend: auth flow and protected routes
+```
+Create ProtectedRoute.jsx:
+- If token exists and API /api/auth/verify (or decode token expiry) is valid, render children.
+- Otherwise redirect to /login.
+- Provide automatic token refresh strategy placeholder (commented) if you later add refresh tokens.
+```
+
+---
+
+## Frontend: UX prompts for Cursor (styling & polish)
+```
+Add Tailwind styled components:
+- A responsive header with logo "SkillPath", links to Dashboard, Jobs, Formations, Logout.
+- Cards for job/formation results with subtle shadow, title, score badge on top-right, small tags for skills.
+- Mobile-first layout, grid for results (1 column mobile, 2-3 columns on desktop).
+```
+
+---
+
+## Integration & testing prompts
+```
+1) Generate Playwright end-to-end tests:
+- Test user register, login, create sample item (use dev fixtures), click Recommend (Keyword), assert results are returned and displayed.
+- Test AI recommend flow by mocking backend /api/recommend/ai to return mocked JSON.
+
+2) Generate unit tests for RecommendButton and ResultList using React Testing Library:
+- Mock api functions to return predictable data and assert rendering.
+
+3) Add storybook stories for ResultList and RecommendButton (optional).
+```
+
+---
+
+## Dev convenience prompts
+```
+1) Generate a small seed script (seed_db.py) that inserts:
+- 3 categories, 5 formations (with descriptions and tags), 5 jobs (with requirement lists).
+2) Generate a .env.example for frontend and backend (REACT_APP_API_URL, GEMINI_API_KEY placeholder, MYSQL creds).
+3) Add README sections: starting backend, starting frontend, how to toggle gemini mock_mode, how to seed DB.
+```
+
+---
+
+## Gemini prompt template for backend (paste into gemini_client prompt body)
+```
+System: You are an assistant that outputs ONLY JSON.
+User: Here is a user profile and a list of candidates.
+
+User profile:
+- competence: ["python","fastapi","sql"]
+- interests: ["web","backend"]
+
+Candidates (jobs/formations): [{"id":1,"type":"job","title":"Backend Dev","skills":["python","fastapi","sql"],"desc":"..."} , ...]
+
+Task: Rank the candidates by relevance to the user. For each candidate return:
+{"id": <int>, "type":"job"|"formation", "score": <0.0-1.0>, "explanation":"<=20 words"}
+
+Return a JSON object:
+{"jobs":[...], "formations":[...]}
+End.
+```
+
+---

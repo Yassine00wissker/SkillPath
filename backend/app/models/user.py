@@ -12,3 +12,4 @@ class User(Base):
     competence = Column(JSON, default=list)
     interests = Column(JSON, default=list)
     password = Column(String(255), nullable=False)
+    role = Column(String(50), default="user")  # user, content_creator, admin

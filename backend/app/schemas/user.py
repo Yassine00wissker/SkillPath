@@ -8,6 +8,7 @@ class UserBase(BaseModel):
     email: EmailStr
     competence: List[str] = []
     interests: List[str] = []
+    role: str = "user"
 
 
 class UserCreate(UserBase):
@@ -21,6 +22,7 @@ class UserUpdate(BaseModel):
     competence: Optional[List[str]] = None
     interests: Optional[List[str]] = None
     password: Optional[str] = None
+    role: Optional[str] = None
 
 
 class UserResponse(UserBase):

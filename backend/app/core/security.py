@@ -11,8 +11,10 @@ from app.models.admin import Admin
 
 # Lazy imports will be used inside functions to avoid circular dependencies
 
+import os
+
 # Secret key for JWT - In production, use environment variable
-SECRET_KEY = "your-secret-key-change-in-production"
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -137,5 +139,17 @@ async def get_current_admin(
         return admin
     except JWTError:
         raise credentials_exception
+
+
+async def get_current_content_creator(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """Get current user if they are a content creator or admin."""
+    if current_user.role not in ["content_creator", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Content creator or admin access required"
+        )
+    return current_user
 
 

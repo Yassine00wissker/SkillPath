@@ -1,6 +1,13 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
+
 from app.config.database import engine, Base
-from app.routes import auth, users, formations, parcours
+from app.routes import auth, users, formations, parcours, recommend, statistics, jobs
 from app.crud import category as crud_category
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,11 +25,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite default port
+        "http://localhost:3000",  # Alternative React port
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Include routers
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(formations.router)
 app.include_router(parcours.router)
+app.include_router(recommend.router)
+app.include_router(statistics.router)
+app.include_router(jobs.router)
 
 # Categories router (inline for simplicity)
 categories_router = APIRouter(prefix="/categories", tags=["categories"])

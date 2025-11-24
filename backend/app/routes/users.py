@@ -96,15 +96,26 @@ async def update_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update a user (Users can only update themselves, admins can update anyone)."""
+    """Update a user (Users can only update themselves, admins can update anyone including roles)."""
     # Users can only update themselves unless they're admin
-    # For now, we'll check if it's the same user
-    # In a real app, you'd check if current_user is admin
+    # Only admins can update roles
     if current_user.id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions to update this user"
-        )
+        # Check if user is admin (via admin table or role)
+        if current_user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions to update this user"
+            )
+        # Admin can update roles, but regular users cannot
+        if user_update.role and current_user.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only admins can update user roles"
+            )
+    else:
+        # Users cannot update their own role
+        if user_update.role:
+            user_update.role = None
     
     # Check email uniqueness if email is being updated
     if user_update.email:
