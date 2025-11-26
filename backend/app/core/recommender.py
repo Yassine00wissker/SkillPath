@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from app.models.formation import Formation
 from app.models.job import Job
 
@@ -55,9 +55,10 @@ async def recommend_keyword(
     jobs: List[Job],
     competences: List[str],
     interests: List[str],
+    goal: Optional[str] = None,
     top_n: int = 5
-) -> Dict[str, List]:
-    """Recommend formations and jobs based on keyword matching."""
+) -> Dict:
+    """Recommend formations and jobs based on keyword matching. Returns skillpath structure."""
     # Score formations
     scored_formations = [
         score_formation(formation, competences, interests)
@@ -69,9 +70,9 @@ async def recommend_keyword(
     top_formations = [
         {
             "id": f.id,
-            "title": f.titre,
-            "description": f.description,
-            "score": round(score, 2)
+            "titre": f.titre,
+            "score": round(score, 2),
+            "match_reason": f"Matches your skills: {', '.join([c for c in competences if c.lower() in (f.titre + ' ' + (f.description or '')).lower()][:2])}"
         }
         for f, score in scored_formations[:top_n] if score > 0
     ]
@@ -87,18 +88,46 @@ async def recommend_keyword(
     top_jobs = [
         {
             "id": job.id,
-            "title": job.title,
-            "description": job.description,
-            "requirements": job.requirements or [],
-            "company": job.company,
-            "location": job.location,
-            "score": round(score, 2)
+            "titre": job.titre,
+            "score": round(score, 2),
+            "match_reason": f"Matches your skills: {', '.join([c for c in competences if c.lower() in (job.titre + ' ' + (job.description or '')).lower()][:2])}"
         }
         for job, score in scored_jobs[:top_n] if score > 0
     ]
     
+    # Build simple skillpath structure
+    goal_text = goal or "Achieve your career goals"
+    steps = []
+    if top_formations:
+        steps.append({
+            "id": "step-1",
+            "title": "Start with recommended formations",
+            "duration_weeks": 4,
+            "progress_estimate": "beginner->intermediate",
+            "resources": [
+                {"type": "formation", "id": f["id"], "titre": f["titre"], "url": None, "score": f["score"]}
+                for f in top_formations[:3]
+            ],
+            "explanation": "Build foundation with these courses"
+        })
+    if top_jobs:
+        steps.append({
+            "id": "step-2",
+            "title": "Explore career opportunities",
+            "duration_weeks": 2,
+            "progress_estimate": "exploration",
+            "resources": [
+                {"type": "job", "id": j["id"], "titre": j["titre"], "url": None, "score": j["score"]}
+                for j in top_jobs[:3]
+            ],
+            "explanation": "Review jobs matching your profile"
+        })
+    
     return {
-        "formations": top_formations,
-        "jobs": top_jobs
+        "title": goal_text[:50] if goal else "Your Learning Path",
+        "summary": f"Personalized recommendations based on your {len(competences)} skills and {len(interests)} interests.",
+        "steps": steps[:5],  # Limit to 5 steps
+        "recommended_jobs": top_jobs,
+        "recommended_formations": top_formations
     }
 

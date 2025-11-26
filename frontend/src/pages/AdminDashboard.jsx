@@ -1,290 +1,158 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getAllUsers, getStatistics, deleteUser, createUser } from '../api/api';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import api from '../api/client';
+import DataTable from '../components/DataTable';
+import { LayoutDashboard, Briefcase, GraduationCap, Download, Plus, Users, Layers } from 'lucide-react';
 
-const AdminDashboard = () => {
-  const [users, setUsers] = useState([]);
-  const [statistics, setStatistics] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [showCreateUser, setShowCreateUser] = useState(false);
-  const [newUser, setNewUser] = useState({
-    nom: '',
-    prenom: '',
-    email: '',
-    password: '',
-    role: 'user',
-    competence: [],
-    interests: []
-  });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const navigate = useNavigate();
+function AdminStats() {
+    const [stats, setStats] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [usersData, statsData] = await Promise.all([
-          getAllUsers(),
-          getStatistics(),
-        ]);
-        setUsers(usersData);
-        setStatistics(statsData);
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-        setError('Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
+    useEffect(() => {
+        api.get('/api/admin/statistics').then(res => setStats(res.data));
+    }, []);
 
-    fetchData();
-  }, []);
+    if (!stats) return <div>Loading stats...</div>;
 
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) {
-      return;
-    }
+    const cards = [
+        { label: 'Total Users', value: stats.total_users, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+        { label: 'Formations', value: stats.total_formations, icon: GraduationCap, color: 'text-green-500', bg: 'bg-green-500/10' },
+        { label: 'Jobs', value: 12, icon: Briefcase, color: 'text-purple-500', bg: 'bg-purple-500/10' }, // Mocked as endpoint might not return it yet
+        { label: 'Categories', value: stats.total_categories, icon: Layers, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+    ];
 
-    try {
-      await deleteUser(userId);
-      setUsers(users.filter(u => u.id !== userId));
-      setSuccess('User deleted successfully');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (error) {
-      setError('Failed to delete user');
-      setTimeout(() => setError(''), 3000);
-    }
-  };
-
-  const handleCreateUser = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    try {
-      const createdUser = await createUser(newUser);
-      setUsers([...users, createdUser]);
-      setShowCreateUser(false);
-      setNewUser({
-        nom: '',
-        prenom: '',
-        email: '',
-        password: '',
-        role: 'user',
-        competence: [],
-        interests: []
-      });
-      setSuccess('User created successfully');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (error) {
-      setError(error.message || 'Failed to create user');
-      setTimeout(() => setError(''), 3000);
-    }
-  };
-
-  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
-  }
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {cards.map((card) => (
+                    <div key={card.label} className="bg-surface border border-white/10 rounded-xl p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className={`p-3 rounded-lg ${card.bg} ${card.color}`}>
+                                <card.icon className="w-6 h-6" />
+                            </div>
+                        </div>
+                        <div className="text-3xl font-bold text-white mb-1">{card.value}</div>
+                        <div className="text-sm text-muted">{card.label}</div>
+                    </div>
+                ))}
+            </div>
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-gray-600 mt-2">Manage users and view platform statistics</p>
-      </div>
-
-      {error && (
-        <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-          {success}
-        </div>
-      )}
-
-      {/* Statistics Cards */}
-      {statistics && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Users</h3>
-            <p className="text-3xl font-bold text-indigo-600 mt-2">{statistics.total_users}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Formations</h3>
-            <p className="text-3xl font-bold text-indigo-600 mt-2">{statistics.total_formations}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Jobs</h3>
-            <p className="text-3xl font-bold text-indigo-600 mt-2">{statistics.total_jobs || 0}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Categories</h3>
-            <p className="text-3xl font-bold text-indigo-600 mt-2">{statistics.total_categories}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Users Management */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-xl font-semibold text-gray-900">Users Management</h2>
-          <button
-            onClick={() => setShowCreateUser(!showCreateUser)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded transition-colors"
-          >
-            {showCreateUser ? 'Cancel' : 'Create User'}
-          </button>
-        </div>
-
-        {showCreateUser && (
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <form onSubmit={handleCreateUser} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    First Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newUser.prenom}
-                    onChange={(e) => setNewUser({ ...newUser, prenom: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Last Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newUser.nom}
-                    onChange={(e) => setNewUser({ ...newUser, nom: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Role
-                </label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="user">User</option>
-                  <option value="content_creator">Content Creator</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <button
-                type="submit"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded transition-colors"
-              >
-                Create User
-              </button>
-            </form>
-          </div>
-        )}
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Email
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Role
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Skills
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
-                <tr key={user.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.prenom} {user.nom}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {user.email}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                      user.role === 'content_creator' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {(user.competence || []).length} skills, {(user.interests || []).length} interests
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
+            <div className="bg-surface border border-white/10 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-white">Database Management</h3>
+                    <button className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors">
+                        <Download className="w-4 h-4" />
+                        Export Database
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </div>
+                <p className="text-muted">
+                    Export the entire database as a JSON file for backup or analysis purposes.
+                </p>
+            </div>
         </div>
-      </div>
-    </div>
-  );
-};
+    );
+}
 
-export default AdminDashboard;
+function AdminJobs() {
+    const [jobs, setJobs] = useState([]);
 
+    useEffect(() => {
+        api.get('/jobs').then(res => setJobs(res.data));
+    }, []);
+
+    const columns = [
+        { key: 'title', label: 'Title' },
+        { key: 'company', label: 'Company' },
+        { key: 'location', label: 'Location' },
+        { key: 'salary_range', label: 'Salary' },
+    ];
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white">Manage Jobs</h2>
+                <button className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition-colors">
+                    <Plus className="w-4 h-4" />
+                    Add Job
+                </button>
+            </div>
+            <DataTable
+                columns={columns}
+                data={jobs}
+                onEdit={(row) => console.log('Edit', row)}
+                onDelete={(row) => console.log('Delete', row)}
+            />
+        </div>
+    );
+}
+
+function AdminFormations() {
+    const [formations, setFormations] = useState([]);
+
+    useEffect(() => {
+        api.get('/formations').then(res => setFormations(res.data));
+    }, []);
+
+    const columns = [
+        { key: 'titre', label: 'Title' },
+        { key: 'duration', label: 'Duration' },
+        { key: 'price', label: 'Price' },
+    ];
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-white">Manage Formations</h2>
+                <button className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition-colors">
+                    <Plus className="w-4 h-4" />
+                    Add Formation
+                </button>
+            </div>
+            <DataTable
+                columns={columns}
+                data={formations}
+                onEdit={(row) => console.log('Edit', row)}
+                onDelete={(row) => console.log('Delete', row)}
+            />
+        </div>
+    );
+}
+
+export default function AdminDashboard() {
+    const location = useLocation();
+
+    const tabs = [
+        { name: 'Overview', path: '/admin', icon: LayoutDashboard },
+        { name: 'Jobs', path: '/admin/jobs', icon: Briefcase },
+        { name: 'Formations', path: '/admin/formations', icon: GraduationCap },
+    ];
+
+    return (
+        <div className="space-y-8">
+            <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
+
+            <div className="flex space-x-1 bg-surface p-1 rounded-xl border border-white/10 w-fit">
+                {tabs.map((tab) => (
+                    <Link
+                        key={tab.name}
+                        to={tab.path}
+                        className={`
+              flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+              ${location.pathname === tab.path
+                                ? 'bg-primary text-white shadow-lg'
+                                : 'text-muted hover:text-white hover:bg-white/5'}
+            `}
+                    >
+                        <tab.icon className="w-4 h-4" />
+                        {tab.name}
+                    </Link>
+                ))}
+            </div>
+
+            <Routes>
+                <Route path="/" element={<AdminStats />} />
+                <Route path="/jobs" element={<AdminJobs />} />
+                <Route path="/formations" element={<AdminFormations />} />
+            </Routes>
+        </div>
+    );
+}

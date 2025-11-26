@@ -144,11 +144,11 @@ async def get_current_admin(
 async def get_current_content_creator(
     current_user: User = Depends(get_current_user)
 ) -> User:
-    """Get current user if they are a content creator or admin."""
-    if current_user.role not in ["content_creator", "admin"]:
+    """Get current user if they are a content creator (can manage content)."""
+    if current_user.role != "content_creator":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Content creator or admin access required"
+            detail="Content creator access required. Only content creators can manage jobs and formations."
         )
     return current_user
 

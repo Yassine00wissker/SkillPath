@@ -7,7 +7,7 @@ import os
 load_dotenv()
 
 from app.config.database import engine, Base
-from app.routes import auth, users, formations, parcours, recommend, statistics, jobs
+from app.routes import auth, users, formations, jobs, parcours, recommend, statistics, admin_stats
 from app.crud import category as crud_category
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryResponse
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -43,10 +43,11 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(formations.router)
+app.include_router(jobs.router)
 app.include_router(parcours.router)
 app.include_router(recommend.router)
 app.include_router(statistics.router)
-app.include_router(jobs.router)
+app.include_router(admin_stats.router)
 
 # Categories router (inline for simplicity)
 categories_router = APIRouter(prefix="/categories", tags=["categories"])

@@ -1,231 +1,127 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getCurrentUser, updateCurrentUser } from '../api/api';
+import { useForm } from 'react-hook-form';
+import { useAuth } from '../context/AuthContext';
+import api from '../api/client';
+import TagInput from '../components/TagInput';
+import { User, Mail, Save, Loader2 } from 'lucide-react';
 
-const Profile = () => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const navigate = useNavigate();
+export default function Profile() {
+    const { user } = useAuth();
+    const { register, handleSubmit, setValue } = useForm();
+    const [loading, setLoading] = useState(false);
+    const [success, setSuccess] = useState('');
+    const [competences, setCompetences] = useState([]);
+    const [interests, setInterests] = useState([]);
 
-  const [formData, setFormData] = useState({
-    nom: '',
-    prenom: '',
-    email: '',
-    competence: '',
-    interests: '',
-  });
+    useEffect(() => {
+        if (user) {
+            setValue('nom', user.nom);
+            setValue('prenom', user.prenom);
+            setValue('email', user.email);
+            setCompetences(user.competence || []);
+            setInterests(user.interests || []);
+        }
+    }, [user, setValue]);
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const userData = await getCurrentUser();
-        setUser(userData);
-        setFormData({
-          nom: userData.nom || '',
-          prenom: userData.prenom || '',
-          email: userData.email || '',
-          competence: (userData.competence || []).join(', '),
-          interests: (userData.interests || []).join(', '),
-        });
-      } catch (error) {
-        console.error('Failed to fetch user:', error);
-        navigate('/login');
-      } finally {
-        setLoading(false);
-      }
+    const onSubmit = async (data) => {
+        setLoading(true);
+        setSuccess('');
+        try {
+            await api.put('/users/me', {
+                ...data,
+                competence: competences,
+                interests: interests,
+            });
+            setSuccess('Profile updated successfully!');
+        } catch (error) {
+            console.error('Failed to update profile', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    fetchUser();
-  }, [navigate]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setSaving(true);
-
-    try {
-      const updateData = {
-        nom: formData.nom,
-        prenom: formData.prenom,
-        email: formData.email,
-        competence: formData.competence
-          ? formData.competence.split(',').map((s) => s.trim()).filter(Boolean)
-          : [],
-        interests: formData.interests
-          ? formData.interests.split(',').map((s) => s.trim()).filter(Boolean)
-          : [],
-      };
-
-      const updatedUser = await updateCurrentUser(updateData);
-      setUser(updatedUser);
-      setSuccess('Profile updated successfully!');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
-
-  if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
+        <div className="max-w-2xl mx-auto">
+            <h1 className="text-3xl font-bold text-white mb-8">My Profile</h1>
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-6">Edit Profile</h1>
+            <div className="bg-surface border border-white/10 rounded-2xl p-8">
+                {success && (
+                    <div className="bg-green-500/10 border border-green-500/50 text-green-500 p-3 rounded-lg mb-6 text-sm">
+                        {success}
+                    </div>
+                )}
 
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-muted mb-2">First Name</label>
+                            <div className="relative">
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                                <input
+                                    {...register('prenom')}
+                                    type="text"
+                                    className="w-full bg-background border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-muted mb-2">Last Name</label>
+                            <div className="relative">
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                                <input
+                                    {...register('nom')}
+                                    type="text"
+                                    className="w-full bg-background border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-muted mb-2">Email Address</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                            <input
+                                {...register('email')}
+                                type="email"
+                                disabled
+                                className="w-full bg-background/50 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-muted cursor-not-allowed"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="border-t border-white/10 pt-6">
+                        <h3 className="text-lg font-semibold text-white mb-4">Skills & Interests</h3>
+                        <div className="space-y-6">
+                            <TagInput
+                                label="Competences"
+                                tags={competences}
+                                onChange={setCompetences}
+                            />
+                            <TagInput
+                                label="Interests"
+                                tags={interests}
+                                onChange={setInterests}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="pt-4">
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                        >
+                            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                                <>
+                                    <Save className="w-5 h-5" />
+                                    Save Changes
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </form>
             </div>
-          )}
-
-          {success && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-              {success}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="nom" className="block text-sm font-medium text-gray-700 mb-2">
-                  Nom
-                </label>
-                <input
-                  id="nom"
-                  name="nom"
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  value={formData.nom}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="prenom" className="block text-sm font-medium text-gray-700 mb-2">
-                  Prénom
-                </label>
-                <input
-                  id="prenom"
-                  name="prenom"
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  value={formData.prenom}
-                  onChange={handleChange}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                value={formData.email}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="competence" className="block text-sm font-medium text-gray-700 mb-2">
-                Competences (comma-separated)
-              </label>
-              <input
-                id="competence"
-                name="competence"
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="python, fastapi, sql"
-                value={formData.competence}
-                onChange={handleChange}
-              />
-              <p className="mt-1 text-sm text-gray-500">
-                Separate multiple competences with commas
-              </p>
-            </div>
-
-            <div>
-              <label htmlFor="interests" className="block text-sm font-medium text-gray-700 mb-2">
-                Interests (comma-separated)
-              </label>
-              <input
-                id="interests"
-                name="interests"
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="web development, backend, api design"
-                value={formData.interests}
-                onChange={handleChange}
-              />
-              <p className="mt-1 text-sm text-gray-500">
-                Separate multiple interests with commas
-              </p>
-            </div>
-
-            {user && user.role && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Role
-                </label>
-                <div className="px-3 py-2 bg-gray-100 rounded-md">
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                    user.role === 'content_creator' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {user.role === 'content_creator' ? 'Content Creator' : user.role}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-4">
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:bg-gray-400"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard')}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
         </div>
-      </div>
-    </div>
-  );
-};
-
-export default Profile;
-
+    );
+}

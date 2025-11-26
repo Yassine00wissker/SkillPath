@@ -17,7 +17,7 @@ async def create_parcours(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_content_creator)
 ):
-    """Create a new parcours (Content creator or Admin only)."""
+    """Create a new parcours (Content Creator only)."""
     return await crud_parcours.create_parcours(db, parcours)
 
 
@@ -56,7 +56,7 @@ async def update_parcours(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_content_creator)
 ):
-    """Update a parcours (Content creator or Admin only)."""
+    """Update a parcours (Content Creator only)."""
     parcours = await crud_parcours.update_parcours(db, parcours_id, parcours_update)
     if not parcours:
         raise HTTPException(
@@ -72,7 +72,7 @@ async def delete_parcours(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_content_creator)
 ):
-    """Delete a parcours (Content creator or Admin only)."""
+    """Delete a parcours (Content Creator only)."""
     success = await crud_parcours.delete_parcours(db, parcours_id)
     if not success:
         raise HTTPException(

@@ -1,9 +1,9 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional, List
 
 
 class JobBase(BaseModel):
-    title: str
+    titre: str
     description: Optional[str] = None
     requirements: List[str] = []
     company: Optional[str] = None
@@ -15,7 +15,7 @@ class JobCreate(JobBase):
 
 
 class JobUpdate(BaseModel):
-    title: Optional[str] = None
+    titre: Optional[str] = None
     description: Optional[str] = None
     requirements: Optional[List[str]] = None
     company: Optional[str] = None

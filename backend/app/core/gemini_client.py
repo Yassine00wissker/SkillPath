@@ -11,69 +11,203 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 
-def build_gemini_prompt(user: Dict, candidates: List[Dict], task: str = "enhance") -> str:
+def build_gemini_prompt(goal: str, competences: List[str], interests: List[str], candidates: List[Dict]) -> str:
     """
-    Create a prompt template for Gemini.
+    Build Gemini prompt for skillpath generation using the template from prompt.txt.
     
     Args:
-        user: User profile with competence, interests, etc.
-        candidates: List of job/formation candidates
-        task: "enhance" (rank existing) or "generate" (suggest new)
+        goal: User's goal (free text)
+        competences: List of current skills
+        interests: List of interests
+        candidates: List of job/formation candidates with id, type, title, description, skills
     """
-    user_profile = f"""
+    competences_json = json.dumps(competences)
+    interests_json = json.dumps(interests)
+    
+    # Format candidates
+    candidates_list = []
+    for c in candidates[:30]:  # Limit to 30 candidates
+        candidate_obj = {
+            "id": c.get("id"),
+            "type": c.get("type", "formation"),
+            "title": c.get("title", c.get("titre", "")),
+            "description": (c.get("description") or "")[:200],
+            "skills": c.get("requirements", c.get("skills", []))
+        }
+        candidates_list.append(candidate_obj)
+    
+    candidates_json = json.dumps(candidates_list, indent=2)
+    
+    prompt = f"""System: You are an assistant that outputs ONLY valid JSON.
+
+User: Given the following user inputs and candidate items, produce a single JSON object representing an AI-generated "skillpath" (a practical roadmap for the user). Do not include any extra text, commentary, or explanation — ONLY JSON.
+
 User profile:
-- Name: {user.get('nom', '')} {user.get('prenom', '')}
-- Email: {user.get('email', '')}
-- Competence: {user.get('competence', [])}
-- Interests: {user.get('interests', [])}
-"""
-    
-    if task == "enhance":
-        candidates_text = "\n".join([
-            f"- {c.get('type', 'unknown')}: {c.get('title', '')} (ID: {c.get('id', '')}) - {c.get('description', '')[:100]}"
-            for c in candidates[:50]  # Limit to 50 candidates
-        ])
-        
-        prompt = f"""System: You are an assistant that outputs ONLY valid JSON. Do not include any markdown formatting, code blocks, or explanations outside the JSON.
+{{
+  "goal": "{goal}",
+  "competences": {competences_json},
+  "interests": {interests_json}
+}}
 
-User: Here is a user profile and a list of candidates.
+Candidates:
+{candidates_json}
 
-{user_profile}
+Task:
+- Produce JSON with this schema:
+{{
+  "title": "<compact 5-8 word title>",
+  "summary": "<1-2 sentence summary>",
+  "steps": [
+    {{
+      "id": "step-1",
+      "title": "short title",
+      "duration_weeks": 1-12,
+      "progress_estimate": "text (e.g., 'beginner->intermediate')",
+      "resources": [
+        {{"type":"formation"|"job"|"external", "id": <int or null>, "titre": "<title or null>", "url": "<if external or null>", "score": 0.0-1.0}}
+      ],
+      "explanation": "<<=20 words>"
+    }},
+    ...
+  ],
+  "recommended_jobs": [{{"id":int,"titre":"", "score":0.0-1.0, "match_reason":"<=20 words"}}],
+  "recommended_formations": [{{"id":int,"titre":"", "score":0.0-1.0, "match_reason":"<=20 words"}}]
+}}
 
-Candidates (jobs/formations):
-{candidates_text}
+Rules:
+1) Return only JSON that strictly follows the schema.
+2) Use IDs from Candidates when referencing formations/jobs. If you add external resources, set id=null and provide URL.
+3) Use scores between 0.0 and 1.0.
+4) Steps should be 3-7 items long, ordered sequentially.
+5) Keep fields concise.
+6) If unsure, return an empty array rather than text.
 
-Task: Rank the candidates by relevance to this user. For each candidate return:
-- id: the candidate ID
-- type: "job" or "formation"
-- score: a relevance score between 0.0 and 1.0
-- explanation: a short explanation (maximum 20 words)
-
-Return a JSON object with this exact structure:
-{{"jobs": [{{"id": <int>, "type": "job", "score": <0.0-1.0>, "explanation": "<text>"}}], "formations": [{{"id": <int>, "type": "formation", "score": <0.0-1.0>, "explanation": "<text>"}}]}}
-
-Return ONLY the JSON object, nothing else."""
-    
-    else:  # generate
-        prompt = f"""System: You are an assistant that outputs ONLY valid JSON. Do not include any markdown formatting, code blocks, or explanations outside the JSON.
-
-User: Here is a user profile.
-
-{user_profile}
-
-Task: Generate job and course suggestions based on this user's skills and interests. For each suggestion return:
-- title: a job title or course name
-- type: "job" or "formation"
-- score: a relevance score between 0.0 and 1.0
-- explanation: why this is relevant (maximum 20 words)
-- description: a brief description
-
-Return a JSON object with this exact structure:
-{{"jobs": [{{"title": "<text>", "type": "job", "score": <0.0-1.0>, "explanation": "<text>", "description": "<text>"}}], "formations": [{{"title": "<text>", "type": "formation", "score": <0.0-1.0>, "explanation": "<text>", "description": "<text>"}}]}}
-
-Return ONLY the JSON object, nothing else."""
+End."""
     
     return prompt
+
+
+async def send_skillpath_request(prompt: str) -> Dict:
+    """
+    Send a skillpath request to Gemini API and return the response.
+    
+    Returns:
+        Parsed JSON response from Gemini with skillpath structure
+    """
+    if MOCK_MODE:
+        # Return deterministic mock response for testing
+        return {
+            "title": "Become Backend Developer",
+            "summary": "A structured path to master backend development with Python and FastAPI.",
+            "steps": [
+                {
+                    "id": "step-1",
+                    "title": "Learn Python basics",
+                    "duration_weeks": 2,
+                    "progress_estimate": "beginner->intermediate",
+                    "resources": [
+                        {"type": "formation", "id": 1, "titre": "Python Fundamentals", "url": None, "score": 0.9},
+                        {"type": "external", "id": None, "titre": "Python Official Docs", "url": "https://docs.python.org", "score": 0.8}
+                    ],
+                    "explanation": "Master Python fundamentals before moving to frameworks"
+                },
+                {
+                    "id": "step-2",
+                    "title": "Learn FastAPI framework",
+                    "duration_weeks": 3,
+                    "progress_estimate": "intermediate->advanced",
+                    "resources": [
+                        {"type": "formation", "id": 2, "titre": "FastAPI for Beginners", "url": None, "score": 0.95}
+                    ],
+                    "explanation": "Build REST APIs with FastAPI"
+                }
+            ],
+            "recommended_jobs": [
+                {"id": 1, "titre": "Backend Developer", "score": 0.95, "match_reason": "Perfect match for Python backend skills"}
+            ],
+            "recommended_formations": [
+                {"id": 1, "titre": "Python Fundamentals", "score": 0.9, "match_reason": "Essential foundation for backend development"}
+            ]
+        }
+    
+    if not GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="GEMINI_API_KEY not configured"
+        )
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
+                json={
+                    "contents": [{
+                        "parts": [{"text": prompt}]
+                    }]
+                },
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Gemini API error: {response.text}"
+                )
+            
+            data = response.json()
+            
+            # Extract text from Gemini response
+            if "candidates" in data and len(data["candidates"]) > 0:
+                text_content = data["candidates"][0]["content"]["parts"][0]["text"]
+                
+                # Try to extract JSON from the response
+                # Remove markdown code blocks if present
+                text_content = text_content.strip()
+                if text_content.startswith("```"):
+                    # Remove markdown code blocks
+                    lines = text_content.split("\n")
+                    text_content = "\n".join(lines[1:-1]) if lines[-1].startswith("```") else "\n".join(lines[1:])
+                
+                # Parse JSON
+                try:
+                    result = json.loads(text_content)
+                    return result
+                except json.JSONDecodeError:
+                    # Try to find JSON object in the text
+                    start = text_content.find("{")
+                    end = text_content.rfind("}") + 1
+                    if start >= 0 and end > start:
+                        result = json.loads(text_content[start:end])
+                        return result
+                    else:
+                        raise ValueError("No valid JSON found in response")
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Invalid response from Gemini API"
+                )
+    
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Gemini API request timeout"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error calling Gemini API: {str(e)}"
+        )
+
+
+# Keep the old function for backward compatibility
+async def send_to_gemini(prompt: str) -> Dict:
+    """
+    Send a prompt to Gemini API and return the response.
+    
+    Returns:
+        Parsed JSON response from Gemini
+    """
+    return await send_skillpath_request(prompt)
 
 
 async def send_to_gemini(prompt: str) -> Dict:

@@ -1,20 +1,24 @@
 import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  const user = localStorage.getItem('user');
+export default function ProtectedRoute({ children, adminOnly = false }) {
+    const { user, loading } = useAuth();
 
-  if (!token || !user) {
-    return <Navigate to="/login" replace />;
-  }
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[50vh]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
 
-  // Optional: Verify token is still valid by checking expiry
-  // For now, we'll just check if token exists
-  // In production, you might want to decode the JWT and check expiry
-  // or call an API endpoint to verify the token
+    if (!user) {
+        return <Navigate to="/login" />;
+    }
 
-  return children;
-};
+    if (adminOnly && user.role !== 'admin') {
+        return <Navigate to="/dashboard" />;
+    }
 
-export default ProtectedRoute;
-
+    return children;
+}

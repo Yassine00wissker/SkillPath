@@ -5,185 +5,147 @@ from pydantic import BaseModel
 from app.config.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.crud import user as crud_user
 from app.crud import formation as crud_formation
 from app.crud import job as crud_job
 from app.core.recommender import recommend_keyword
-from app.core.gemini_client import build_gemini_prompt, send_to_gemini
+from app.core.gemini_client import build_gemini_prompt, send_skillpath_request
 
 router = APIRouter(prefix="/api/recommend", tags=["recommendations"])
 
 
-class KeywordRecommendRequest(BaseModel):
-    user_id: int
+class RecommendSubmitRequest(BaseModel):
+    goal: str
+    competences: List[str] = []
+    interests: List[str] = []
+    mode: str = "keyword"  # "keyword" or "ai"
     top_n: Optional[int] = 5
 
 
-class AIRecommendRequest(BaseModel):
-    user_id: int
-    mode: str = "enhance"  # "enhance" or "generate"
-    top_n: Optional[int] = 5
-
-
-@router.post("/keyword")
-async def recommend_keyword_endpoint(
-    request: KeywordRecommendRequest,
+@router.post("/submit")
+async def recommend_submit(
+    request: RecommendSubmitRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get keyword-based recommendations for a user.
-    Requires authentication.
+    Submit a recommendation request with user-provided form data.
+    Returns a skillpath structure with steps, recommended jobs, and formations.
+    Requires authentication (non-guest).
     """
-    # Fetch user
-    user = await crud_user.get_user(db, request.user_id)
-    if not user:
+    # Validate inputs
+    if request.mode == "ai" and not request.goal:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Goal is required for AI mode"
         )
     
-    # Get all formations and jobs
+    # Get all formations and jobs from database
     all_formations = await crud_formation.get_formations(db, skip=0, limit=1000)
     all_jobs = await crud_job.get_jobs(db, skip=0, limit=1000)
     
-    # Get user competences and interests
-    competences = user.competence or []
-    interests = user.interests or []
-    
-    # Get recommendations
-    recommendations = await recommend_keyword(
-        all_formations,
-        all_jobs,
-        competences,
-        interests,
-        top_n=request.top_n
-    )
-    
-    return {
-        "source": "keyword",
-        **recommendations
-    }
-
-
-@router.post("/ai")
-async def recommend_ai_endpoint(
-    request: AIRecommendRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get AI-enhanced recommendations using Gemini.
-    Requires authentication.
-    Falls back to keyword recommender if Gemini fails.
-    """
-    # Fetch user
-    user = await crud_user.get_user(db, request.user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Get user data as dict
-    user_dict = {
-        "nom": user.nom,
-        "prenom": user.prenom,
-        "email": user.email,
-        "competence": user.competence or [],
-        "interests": user.interests or []
-    }
-    
-    try:
-        if request.mode == "enhance":
-            # Get all formations and jobs
-            all_formations = await crud_formation.get_formations(db, skip=0, limit=1000)
-            
-            # Prepare candidates
+    if request.mode == "ai":
+        try:
+            # Prepare candidates for Gemini
             candidates = []
-            for formation in all_formations[:50]:  # Limit to 50
+            for formation in all_formations[:30]:
                 candidates.append({
                     "id": formation.id,
                     "type": "formation",
                     "title": formation.titre,
-                    "description": formation.description or ""
+                    "titre": formation.titre,
+                    "description": formation.description or "",
+                    "skills": []  # Formations don't have skills in current schema
                 })
             
-            all_jobs = await crud_job.get_jobs(db, skip=0, limit=1000)
-            for job in all_jobs[:50]:
+            for job in all_jobs[:30]:
                 candidates.append({
                     "id": job.id,
                     "type": "job",
-                    "title": job.title,
+                    "title": job.titre,
+                    "titre": job.titre,
                     "description": job.description or "",
-                    "requirements": job.requirements or []
+                    "requirements": job.requirements or [],
+                    "skills": job.requirements or []
                 })
             
             # Build prompt
-            prompt = build_gemini_prompt(user_dict, candidates, task="enhance")
+            prompt = build_gemini_prompt(
+                goal=request.goal,
+                competences=request.competences,
+                interests=request.interests,
+                candidates=candidates
+            )
             
             # Call Gemini
-            gemini_response = await send_to_gemini(prompt)
+            skillpath = await send_skillpath_request(prompt)
             
-            # Format response
+            # Validate and ensure IDs exist
+            # Verify formation IDs
+            valid_formation_ids = {f.id for f in all_formations}
+            valid_job_ids = {j.id for j in all_jobs}
+            
+            # Clean up steps resources
+            if "steps" in skillpath:
+                for step in skillpath["steps"]:
+                    if "resources" in step:
+                        valid_resources = []
+                        for resource in step["resources"]:
+                            if resource.get("type") == "formation" and resource.get("id"):
+                                if resource["id"] in valid_formation_ids:
+                                    valid_resources.append(resource)
+                            elif resource.get("type") == "job" and resource.get("id"):
+                                if resource["id"] in valid_job_ids:
+                                    valid_resources.append(resource)
+                            elif resource.get("type") == "external":
+                                valid_resources.append(resource)
+                        step["resources"] = valid_resources
+            
+            # Clean up recommended lists
+            if "recommended_formations" in skillpath:
+                skillpath["recommended_formations"] = [
+                    f for f in skillpath["recommended_formations"]
+                    if f.get("id") in valid_formation_ids
+                ]
+            
+            if "recommended_jobs" in skillpath:
+                skillpath["recommended_jobs"] = [
+                    j for j in skillpath["recommended_jobs"]
+                    if j.get("id") in valid_job_ids
+                ]
+            
             return {
-                "source": "gemini",
-                "jobs": gemini_response.get("jobs", []),
-                "formations": gemini_response.get("formations", [])
+                "source": "ai",
+                "skillpath": skillpath
             }
         
-        else:  # generate
-            # Build prompt for generation
-            prompt = build_gemini_prompt(user_dict, [], task="generate")
+        except Exception as e:
+            # Fallback to keyword recommender
+            skillpath = await recommend_keyword(
+                formations=all_formations,
+                jobs=all_jobs,
+                competences=request.competences,
+                interests=request.interests,
+                goal=request.goal,
+                top_n=request.top_n
+            )
             
-            # Call Gemini
-            gemini_response = await send_to_gemini(prompt)
-            
-            # Format response
             return {
-                "source": "gemini",
-                "jobs": gemini_response.get("jobs", []),
-                "formations": gemini_response.get("formations", [])
+                "source": "keyword",
+                "fallback_reason": f"AI service error: {str(e)}",
+                "skillpath": skillpath
             }
     
-    except HTTPException as e:
-        # If Gemini fails, fallback to keyword recommender
-        all_formations = await crud_formation.get_formations(db, skip=0, limit=1000)
-        all_jobs = await crud_job.get_jobs(db, skip=0, limit=1000)
-        competences = user.competence or []
-        interests = user.interests or []
-        
-        recommendations = await recommend_keyword(
-            all_formations,
-            all_jobs,
-            competences,
-            interests,
+    else:  # keyword mode
+        skillpath = await recommend_keyword(
+            formations=all_formations,
+            jobs=all_jobs,
+            competences=request.competences,
+            interests=request.interests,
+            goal=request.goal,
             top_n=request.top_n
         )
         
         return {
             "source": "keyword",
-            "fallback_reason": str(e.detail),
-            **recommendations
+            "skillpath": skillpath
         }
-    except Exception as e:
-        # Fallback to keyword recommender on any error
-        all_formations = await crud_formation.get_formations(db, skip=0, limit=1000)
-        all_jobs = await crud_job.get_jobs(db, skip=0, limit=1000)
-        competences = user.competence or []
-        interests = user.interests or []
-        
-        recommendations = await recommend_keyword(
-            all_formations,
-            all_jobs,
-            competences,
-            interests,
-            top_n=request.top_n
-        )
-        
-        return {
-            "source": "keyword",
-            "fallback_reason": f"AI service error: {str(e)}",
-            **recommendations
-        }
-

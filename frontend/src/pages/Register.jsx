@@ -1,178 +1,99 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { registerUser } from '../api/api';
+import { useForm } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { Mail, Lock, User, Loader2 } from 'lucide-react';
 
-const Register = () => {
-  const [formData, setFormData] = useState({
-    nom: '',
-    prenom: '',
-    email: '',
-    password: '',
-    competence: '',
-    interests: '',
-  });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+export default function Register() {
+    const { register, handleSubmit, formState: { errors } } = useForm();
+    const { register: registerUser } = useAuth();
+    const navigate = useNavigate();
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+    const onSubmit = async (data) => {
+        setIsLoading(true);
+        setError('');
+        try {
+            await registerUser(data);
+            navigate('/login');
+        } catch (err) {
+            setError('Registration failed. Email might be taken.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-    try {
-      // Convert comma-separated strings to arrays
-      const data = {
-        ...formData,
-        competence: formData.competence
-          ? formData.competence.split(',').map((s) => s.trim()).filter(Boolean)
-          : [],
-        interests: formData.interests
-          ? formData.interests.split(',').map((s) => s.trim()).filter(Boolean)
-          : [],
-      };
+    return (
+        <div className="flex items-center justify-center min-h-[80vh]">
+            <div className="w-full max-w-md p-8 bg-surface rounded-2xl border border-white/10 shadow-xl">
+                <h2 className="text-3xl font-bold text-center mb-8 text-white">Create Account</h2>
 
-      await registerUser(data);
-      // After registration, redirect to login
-      navigate('/login');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+                {error && (
+                    <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-lg mb-6 text-sm text-center">
+                        {error}
+                    </div>
+                )}
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-muted mb-2">Full Name</label>
+                        <div className="relative">
+                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                            <input
+                                {...register('full_name', { required: true })}
+                                type="text"
+                                className="w-full bg-background border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                                placeholder="John Doe"
+                            />
+                        </div>
+                        {errors.full_name && <span className="text-xs text-red-500 mt-1">Name is required</span>}
+                    </div>
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Create your account
-          </h2>
+                    <div>
+                        <label className="block text-sm font-medium text-muted mb-2">Email Address</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                            <input
+                                {...register('email', { required: true })}
+                                type="email"
+                                className="w-full bg-background border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                                placeholder="you@example.com"
+                            />
+                        </div>
+                        {errors.email && <span className="text-xs text-red-500 mt-1">Email is required</span>}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-muted mb-2">Password</label>
+                        <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
+                            <input
+                                {...register('password', { required: true })}
+                                type="password"
+                                className="w-full bg-background border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                                placeholder="••••••••"
+                            />
+                        </div>
+                        {errors.password && <span className="text-xs text-red-500 mt-1">Password is required</span>}
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-primary hover:bg-primary-hover text-white py-3 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                    >
+                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Account'}
+                    </button>
+                </form>
+
+                <p className="mt-6 text-center text-muted text-sm">
+                    Already have an account?{' '}
+                    <Link to="/login" className="text-primary hover:text-primary-hover font-medium">
+                        Sign in
+                    </Link>
+                </p>
+            </div>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="nom" className="block text-sm font-medium text-gray-700">
-                Nom
-              </label>
-              <input
-                id="nom"
-                name="nom"
-                type="text"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                value={formData.nom}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label htmlFor="prenom" className="block text-sm font-medium text-gray-700">
-                Prénom
-              </label>
-              <input
-                id="prenom"
-                name="prenom"
-                type="text"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                value={formData.prenom}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                value={formData.email}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                value={formData.password}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label htmlFor="competence" className="block text-sm font-medium text-gray-700">
-                Competences (comma-separated)
-              </label>
-              <input
-                id="competence"
-                name="competence"
-                type="text"
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="python, fastapi, sql"
-                value={formData.competence}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label htmlFor="interests" className="block text-sm font-medium text-gray-700">
-                Interests (comma-separated)
-              </label>
-              <input
-                id="interests"
-                name="interests"
-                type="text"
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="web development, backend, api design"
-                value={formData.interests}
-                onChange={handleChange}
-              />
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-400"
-            >
-              {loading ? 'Creating account...' : 'Register'}
-            </button>
-          </div>
-
-          <div className="text-center">
-            <Link
-              to="/login"
-              className="font-medium text-indigo-600 hover:text-indigo-500"
-            >
-              Already have an account? Sign in
-            </Link>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-export default Register;
-
+    );
+}

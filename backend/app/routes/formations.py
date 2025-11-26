@@ -2,8 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from app.config.database import get_db
-from app.core.security import get_current_user, get_current_admin, get_current_content_creator
-from app.models.user import User
+from app.core.security import get_current_admin
 from app.models.admin import Admin
 from app.crud import formation as crud_formation
 from app.crud import category as crud_category
@@ -16,9 +15,9 @@ router = APIRouter(prefix="/formations", tags=["formations"])
 async def create_formation(
     formation: FormationCreate, 
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_content_creator)
+    current_admin: Admin = Depends(get_current_admin)
 ):
-    """Create a new formation (Content creator or Admin only)."""
+    """Create a new formation (Admin only)."""
     # Verify category exists
     category = await crud_category.get_category(db, formation.category_id)
     if not category:
@@ -33,10 +32,9 @@ async def create_formation(
 async def get_formations(
     skip: int = 0, 
     limit: int = 100, 
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get all formations (Authenticated users only)."""
+    """Get all formations (Public - no authentication required)."""
     formations = await crud_formation.get_formations(db, skip=skip, limit=limit)
     return formations
 
@@ -44,10 +42,9 @@ async def get_formations(
 @router.get("/{formation_id}", response_model=FormationResponse)
 async def get_formation(
     formation_id: int, 
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get a formation by ID (Authenticated users only)."""
+    """Get a formation by ID (Public - no authentication required)."""
     formation = await crud_formation.get_formation(db, formation_id)
     if not formation:
         raise HTTPException(
@@ -62,9 +59,9 @@ async def update_formation(
     formation_id: int,
     formation_update: FormationUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_content_creator)
+    current_admin: Admin = Depends(get_current_admin)
 ):
-    """Update a formation (Content creator or Admin only)."""
+    """Update a formation (Admin only)."""
     # Verify category exists if category_id is being updated
     if formation_update.category_id:
         category = await crud_category.get_category(db, formation_update.category_id)
@@ -87,9 +84,9 @@ async def update_formation(
 async def delete_formation(
     formation_id: int, 
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_content_creator)
+    current_admin: Admin = Depends(get_current_admin)
 ):
-    """Delete a formation (Content creator or Admin only)."""
+    """Delete a formation (Admin only)."""
     success = await crud_formation.delete_formation(db, formation_id)
     if not success:
         raise HTTPException(

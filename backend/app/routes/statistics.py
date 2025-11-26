@@ -8,7 +8,6 @@ from app.models.user import User
 from app.models.formation import Formation
 from app.models.category import Category
 from app.models.parcours import Parcours
-from app.models.job import Job
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/statistics", tags=["statistics"])
@@ -19,7 +18,6 @@ class StatisticsResponse(BaseModel):
     total_formations: int
     total_categories: int
     total_parcours: int
-    total_jobs: int
     user_stats: Dict
 
 
@@ -46,10 +44,6 @@ async def get_statistics(
         parcours_result = await db.execute(select(func.count(Parcours.id)))
         total_parcours = parcours_result.scalar() or 0
         
-        # Count jobs
-        jobs_result = await db.execute(select(func.count(Job.id)))
-        total_jobs = jobs_result.scalar() or 0
-        
         # User-specific stats
         user_stats = {
             "competence_count": len(current_user.competence or []),
@@ -65,7 +59,6 @@ async def get_statistics(
             "total_formations": total_formations,
             "total_categories": total_categories,
             "total_parcours": total_parcours,
-            "total_jobs": total_jobs,
             "user_stats": user_stats
         }
     except Exception as e:

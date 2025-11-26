@@ -8,7 +8,7 @@ from app.schemas.job import JobCreate, JobUpdate
 async def create_job(db: AsyncSession, job: JobCreate) -> Job:
     """Create a new job."""
     db_job = Job(
-        title=job.title,
+        titre=job.titre,
         description=job.description,
         requirements=job.requirements,
         company=job.company,
